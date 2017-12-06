@@ -16,7 +16,7 @@ display_step = 50
 # Network Parameters
 n_input = 784  # MNIST data input (img shape: 28*28)
 n_classes = 10  # MNIST total classes (0-9 digits)
-dropout = 0.75  # Dropout, probability to keep units
+dropout_keep = 0.75  # Dropout, probability to keep units
 
 # Graph Input
 x = tf.placeholder("float32", [None, n_input], name="x_input")
@@ -34,10 +34,19 @@ def maxpool2d(x, k=2):
     return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
 
 # Normalization
+def lr_normalization(x, alpha=1e-4, beta=0.75):
+    return tf.nn.local_response_normalization(x, depth_radius=5, bias=2, alpha=alpha, beta=beta)
 
+# Fully_connected
+def f_connected(x, w, b, dropout_keep):
+    if len(x.get_shape().as_list()) == 4:
+        x = tf.reshape(x, [-1, w.get_shape().as_list()[0]])
+    x = tf.add(tf.matmul(x, w), b)
+    x = tf.nn.relu(x)
+    return tf.nn.dropout(x, dropout_keep)
 
 # Create model
-def conv_net(x, weights, biases, dropout):
+def conv_net(x, weights, biases, dropout_keep):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, 28, 28, 1])
 
@@ -53,11 +62,7 @@ def conv_net(x, weights, biases, dropout):
 
     # Fully connected layer
     # Reshape conv2 output to fit fully connected layer input
-    fc1 = tf.reshape(conv2, [-1, weights['wd1'].get_shape().as_list()[0]])
-    fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
-    fc1 = tf.nn.relu(fc1)
-    # Apply Dropout
-    fc1 = tf.nn.dropout(fc1, dropout)
+    fc1 = f_connected(conv2, weights['wd1'], biases['bd1'], dropout_keep)
 
     # Output, class prediction
     out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
@@ -130,7 +135,7 @@ with tf.Session() as sess:
         batch_x, batch_y = mnist.train.next_batch(batch_size)
         # Run optimization op (backprop)
         sess.run(optimizer, feed_dict={x: batch_x, y: batch_y,
-                                       keep_prob: dropout})
+                                       keep_prob: dropout_keep})
         if step % display_step == 0:
             # Calculate batch loss and accuracy
             loss, acc = sess.run([cost, accuracy], feed_dict={x: batch_x,
