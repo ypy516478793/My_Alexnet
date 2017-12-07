@@ -30,8 +30,8 @@ def conv2d(x, W, b, strides=1):
     return tf.nn.relu(x)
 
 # MaxPool2D
-def maxpool2d(x, k=2):
-    return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
+def maxpool2d(x, strides=2, ksize=2):
+    return tf.nn.max_pool(x, ksize=[1, ksize, ksize, 1], strides=[1, strides, strides, 1], padding='VALID')
 
 # Normalization
 def lr_normalization(x, alpha=1e-4, beta=0.75):
@@ -46,19 +46,19 @@ def f_connected(x, w, b, dropout_keep):
     return tf.nn.dropout(x, dropout_keep)
 
 # Create model
-def conv_net(x, weights, biases, dropout_keep):
+def alex_net(x, weights, biases, dropout_keep):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, 28, 28, 1])
 
     # Convolution Layer
     conv1 = conv2d(x, weights['wc1'], biases['bc1'])
     # Max Pooling (down-sampling)
-    conv1 = maxpool2d(conv1, k=2)
+    conv1 = maxpool2d(conv1, strides=2, ksize=2)
 
     # Convolution Layer
     conv2 = conv2d(conv1, weights['wc2'], biases['bc2'])
     # Max Pooling (down-sampling)
-    conv2 = maxpool2d(conv2, k=2)
+    conv2 = maxpool2d(conv2, strides=2, ksize=2)
 
     # Fully connected layer
     # Reshape conv2 output to fit fully connected layer input
@@ -88,7 +88,7 @@ biases = {
 }
 
 # Construct model
-pred = conv_net(x, weights, biases, keep_prob)
+pred = alex_net(x, weights, biases, keep_prob)
 
 # Define loss and optimizer
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
