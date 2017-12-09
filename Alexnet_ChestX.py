@@ -1,40 +1,55 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
+import h5py
 
-from tensorflow.examples.tutorials.mnist import input_data
+h5f_train = h5py.File('/data/hula/pyuan2/ChestX_data/chest256_train_801010.h5', 'r')
+X_train = h5f_train['X_train'][:]
+Y_train = h5f_train['Y_train'][:]
+h5f_train.close()
 
-mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
-print('Training set', mnist.train.images.shape, mnist.train.labels.shape)
-print('Test set', mnist.test.images.shape, mnist.test.labels.shape)
+h5f_valid = h5py.File('/data/hula/pyuan2/ChestX_data/chest256_val_801010.h5', 'r')
+X_valid = h5f_valid['X_val'][:]
+Y_valid = h5f_valid['Y_val'][:]
+h5f_valid.close()
+
+h5f_test = h5py.File('/data/hula/pyuan2/ChestX_data/chest256_test_801010.h5', 'r')
+X_test = h5f_test['X_test'][:]
+Y_test = h5f_test['Y_test'][:]
+h5f_test.close()
+
+
+print('Training set', X_train.shape, Y_train.shape)
+print('Test set', X_test.shape, Y_test.shape)
 
 # Training Parameters
-epoch_num = 2
+epoch_num = 100
 learning_rate = 0.001
 # training_iters = 250
-batch_size = 128
+batch_size = 50
 display_step = 50
-training_iters = mnist.train.images.shape[0] // batch_size
+training_iters = X_train.shape[0] // batch_size
 
 # Network Parameters
-n_input = 784  # MNIST data input (img shape: 28*28)
-n_classes = 10  # MNIST total classes (0-9 digits)
+n_input1 = 256  # data input (img shape: 256*256)
+n_input2 = 256
+n_classes = 15  # labels total classes
 dropout_keep = 0.75  # Dropout, probability to keep units
 
 # Graph Input
-x = tf.placeholder("float32", [None, n_input], name="x_input")
+x = tf.placeholder("float32", [None, n_input1, n_input2], name="x_input")
 y = tf.placeholder("float32", [None, n_classes], name="y_input")
 keep_prob = tf.placeholder("float32")
 
 # Conv2D
-def conv2d(x, W, b, strides=1):
-    x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding="SAME")
+def conv2d(x, W, b, strides=1, padding="SAME"):
+    x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding=padding)
     x = tf.nn.bias_add(x, b)
     return tf.nn.relu(x)
 
 # MaxPool2D
-def maxpool2d(x, strides=2, ksize=2):
-    return tf.nn.max_pool(x, ksize=[1, ksize, ksize, 1], strides=[1, strides, strides, 1], padding="VALID")
+def maxpool2d(x, strides=2, ksize=2, padding="VALID"):
+    return tf.nn.max_pool(x, ksize=[1, ksize, ksize, 1], strides=[1, strides, strides, 1], padding=padding)
 
 # Normalization
 def lr_normalization(x, alpha=1e-4, beta=0.75):
@@ -52,15 +67,15 @@ def f_connected(x, w, b, dropout_keep):
 # Create model
 def alex_net(x, weights, biases, dropout_keep):
     # Reshape input picture
-    x = tf.reshape(x, shape=[-1, 28, 28, 1])
+    x = tf.reshape(x, shape=[-1, 256, 256, 1])
 
     # Convolution Layer
     with tf.name_scope("conv1"):
-        conv1 = conv2d(x, weights["wc1"], biases["bc1"])
+        conv1 = conv2d(x, weights["wc1"], biases["bc1"], strides=4,  padding="VALID")
         # Normalization
         conv1 = lr_normalization(conv1)
         # Max Pooling (down-sampling)
-        conv1 = maxpool2d(conv1, strides=1, ksize=2)
+        conv1 = maxpool2d(conv1, strides=2, ksize=3, padding="SAME")
 
     # Convolution Layer
     with tf.name_scope("conv2"):
@@ -80,7 +95,7 @@ def alex_net(x, weights, biases, dropout_keep):
 
     # Convolution Layer
     with tf.name_scope("conv5"):
-        conv5 = conv2d(conv4, weights["wc5"], biases["bc5"])
+        conv5 = conv2d(conv4, weights["wc5"], biases["bc5"], padding="VALID")
         # Max Pooling (down-sampling)
         conv5 = maxpool2d(conv5, strides=2, ksize=3)
 
@@ -99,32 +114,24 @@ def alex_net(x, weights, biases, dropout_keep):
 
 # Store layers weight & bias
 weights = {
-    # 7x7 conv, 1 input, 64 outputs
-    "wc1": tf.Variable(tf.random_normal([7, 7, 1, 64])),
-    # 5x5 conv, 64 inputs, 128 outputs
-    "wc2": tf.Variable(tf.random_normal([5, 5, 64, 128])),
-    # 3x3 conv, 128 inputs, 256 outputs
-    "wc3": tf.Variable(tf.random_normal([3, 3, 128, 256])),
-    # 3x3 conv, 256 inputs, 256 outputs
-    "wc4": tf.Variable(tf.random_normal([3, 3, 256, 256])),
-    # 3x3 conv, 256 inputs, 128 outputs
-    "wc5": tf.Variable(tf.random_normal([3, 3, 256, 128])),
-    # fully connected, 6*6*128 inputs, 1024 outputs
-    "wf1": tf.Variable(tf.random_normal([6 * 6 * 128, 1024])),
-    # fully connected, 1024 inputs, 1024 outputs
-    "wf2": tf.Variable(tf.random_normal([1024, 1024])),
-    # 1024 inputs, 10 outputs (class prediction)
-    "out": tf.Variable(tf.random_normal([1024, n_classes]))
+    "wc1": tf.Variable(tf.random_normal([12, 12, 1, 96])),
+    "wc2": tf.Variable(tf.random_normal([5, 5, 96, 256])),
+    "wc3": tf.Variable(tf.random_normal([3, 3, 256, 384])),
+    "wc4": tf.Variable(tf.random_normal([3, 3, 384, 384])),
+    "wc5": tf.Variable(tf.random_normal([3, 3, 384, 256])),
+    "wf1": tf.Variable(tf.random_normal([6 * 6 * 256, 4096])),
+    "wf2": tf.Variable(tf.random_normal([4096, 4096])),
+    "out": tf.Variable(tf.random_normal([4096, n_classes]))
 }
 
 biases = {
-    "bc1": tf.Variable(tf.random_normal([64])),
-    "bc2": tf.Variable(tf.random_normal([128])),
-    "bc3": tf.Variable(tf.random_normal([256])),
-    "bc4": tf.Variable(tf.random_normal([256])),
-    "bc5": tf.Variable(tf.random_normal([128])),
-    "bf1": tf.Variable(tf.random_normal([1024])),
-    "bf2": tf.Variable(tf.random_normal([1024])),
+    "bc1": tf.Variable(tf.random_normal([96])),
+    "bc2": tf.Variable(tf.random_normal([256])),
+    "bc3": tf.Variable(tf.random_normal([384])),
+    "bc4": tf.Variable(tf.random_normal([384])),
+    "bc5": tf.Variable(tf.random_normal([256])),
+    "bf1": tf.Variable(tf.random_normal([4096])),
+    "bf2": tf.Variable(tf.random_normal([4096])),
     "out": tf.Variable(tf.random_normal([n_classes]))
 }
 
@@ -134,20 +141,21 @@ pred = alex_net(x, weights, biases, keep_prob)
 # Define loss and optimizer
 with tf.name_scope("Training"):
     with tf.name_scope("total_loss"):
-        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
+        cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=y))
         tf.summary.scalar("total_loss", cost)
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 
 # Evaluate model
 with tf.name_scope("Evaluate_model"):
     with tf.name_scope("correct_pred"):
-        correct_pred = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
+        pred_bool = tf.equal(tf.round(tf.nn.sigmoid(pred)), y)
+        correct_pred = tf.reduce_prod(tf.cast(pred_bool,tf.float32), 1)
     with tf.name_scope("accuracy"):
-        accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        accuracy = tf.reduce_mean(correct_pred)
         tf.summary.scalar("accuracy", accuracy)
 
-# predict the class of the sample
-pred_class = tf.argmax(pred, axis=1)
+# predict the labels of the sample
+pred_labels = tf.round(tf.nn.sigmoid(pred))
 
 # Initializing the variables
 init = tf.global_variables_initializer()
@@ -178,12 +186,13 @@ with tf.Session() as sess:
     sess.run(init)
     # Write summaries
     merged = tf.summary.merge_all()
-    train_writer = tf.summary.FileWriter("./Output" + "/train/", sess.graph)
-    valid_writer = tf.summary.FileWriter("./Output" + "/valid/")
+    train_writer = tf.summary.FileWriter("./Output_chestX" + "/train/", sess.graph)
+    valid_writer = tf.summary.FileWriter("./Output_chestX" + "/valid/")
     for epoch in range(epoch_num):
         for step in range(training_iters):
             total_step = epoch * training_iters + step #total step
-            batch_x, batch_y = mnist.train.next_batch(batch_size)
+            batch_x = X_train[step * batch_size: step * batch_size + batch_size]
+            batch_y = Y_train[step * batch_size: step * batch_size + batch_size]
             # Run optimization op (backprop)
             summary, _ =  sess.run([merged, optimizer], feed_dict={x: batch_x, y: batch_y,
                                            keep_prob: dropout_keep})
@@ -215,19 +224,19 @@ with tf.Session() as sess:
 
     # test the network
     # Calculate accuracy
-    acc_test = sess.run(accuracy, feed_dict={x: mnist.test.images[:256],
-                                        y: mnist.test.labels[:256],
+    acc_test = sess.run(accuracy, feed_dict={x: X_test[:1024],
+                                        y: Y_test[:1024],
                                         keep_prob: 1.})
     print("Testing Accuracy:", acc_test)
     # Predict single images
     n_images = 4
-    test_images = mnist.test.images[:n_images]
-    preds = sess.run(pred_class, feed_dict={x: test_images,
+    test_images = X_test[:n_images]
+    preds = sess.run(pred_labels, feed_dict={x: test_images,
                                             keep_prob: 1.})
     # Display
     for i in range(n_images):
         plt.figure()
-        plt.imshow(np.reshape(test_images[i], [28, 28]), cmap="gray")
+        plt.imshow(np.reshape(test_images[i], [256, 256]), cmap="gray")
         plt.show()
         print("Model prediction:", preds[i])
 
